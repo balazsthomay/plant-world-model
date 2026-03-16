@@ -1,0 +1,17 @@
+[project]
+name = "plant-world-model"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gymnasium>=1.2.3",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.3",
+    "pandas>=3.0.1",
+    "pcgym>=0.1.8",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "stable-baselines3>=2.7.1",
+    "torch>=2.10.0",
+]
