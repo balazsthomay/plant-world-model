@@ -16,3 +16,5 @@ SPEC.md
 # Generated data and artifacts
 data/
 *.pt
+.superset
+.conductor

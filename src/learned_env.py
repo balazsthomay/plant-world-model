@@ -11,14 +11,42 @@ class SetpointRewardWrapper(gym.Wrapper):
     """Replaces the environment's reward with setpoint tracking reward.
 
     This ensures both GT and learned envs use the same reward function.
+    Also randomizes initial conditions for evaluation diversity.
     """
 
     def __init__(
-        self, env: gym.Env, setpoints: dict[str, float], state_names: list[str]
+        self,
+        env: gym.Env,
+        setpoints: dict[str, float],
+        state_names: list[str],
+        x0: np.ndarray | None = None,
+        state_low: np.ndarray | None = None,
+        state_high: np.ndarray | None = None,
     ) -> None:
         super().__init__(env)
         self.setpoints = setpoints
         self.state_names = state_names
+        self._x0 = x0
+        self._state_low = state_low
+        self._state_high = state_high
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        # Perturb initial state if bounds are provided
+        if self._x0 is not None and self._state_low is not None:
+            noise_scale = 0.05 * (self._state_high - self._state_low)
+            noise = self.np_random.uniform(-noise_scale, noise_scale).astype(np.float32)
+            obs = np.clip(
+                self._x0.astype(np.float32) + noise,
+                self._state_low,
+                self._state_high,
+            ).astype(np.float32)
+            # Overwrite the env's internal state
+            if hasattr(self.env, 'state'):
+                self.env.state = obs.copy()
+            if hasattr(self.env, 'obs'):
+                self.env.obs = obs.copy()
+        return obs, info
 
     def step(self, action):
         obs, _reward, terminated, truncated, info = self.env.step(action)
@@ -69,7 +97,14 @@ class LearnedCSTREnv(gym.Env):
         options: dict | None = None,
     ) -> tuple[np.ndarray, dict]:
         super().reset(seed=seed)
-        self._state = self.config.x0.copy().astype(np.float32)
+        # Randomize initial state around x0 (+/- 5% of range)
+        noise_scale = 0.05 * (self.config.state_high - self.config.state_low)
+        noise = self.np_random.uniform(-noise_scale, noise_scale).astype(np.float32)
+        self._state = np.clip(
+            self.config.x0.astype(np.float32) + noise,
+            self.config.state_low,
+            self.config.state_high,
+        ).astype(np.float32)
         self._step_count = 0
         return self._state.copy(), {}
 

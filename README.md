@@ -42,9 +42,11 @@ The sim-to-real transfer gap is the central evaluation: can a policy learned ent
 
 | Condition | Mean Episode Reward |
 |-----------|-------------------|
-| GT-trained, evaluated in GT | -0.53 |
-| Learned-trained, evaluated in Learned | -0.55 |
-| Learned-trained, evaluated in GT | -0.52 |
+| GT-trained, evaluated in GT | -0.02 +/- 0.00 |
+| Learned-trained, evaluated in Learned | -0.21 +/- 0.01 |
+| Learned-trained, evaluated in GT | -0.20 +/- 0.01 |
+
+The GT-trained agent achieves near-perfect setpoint tracking (-0.02). The learned-env agent reaches -0.20 — a 10x gap driven by small model prediction errors compounding over 100-step episodes. Crucially, the learned-env agent transfers to the GT environment with no additional degradation (-0.21 vs -0.20), confirming the learned model is a faithful simulator even if not perfect.
 
 ## Scaling to Real Industrial Data: Tennessee Eastman Process
 

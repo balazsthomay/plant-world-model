@@ -34,9 +34,9 @@ def step1_collect_data(cstr_config: CSTRConfig) -> dict[str, np.ndarray]:
     print("Step 1: Collecting CSTR rollout data...")
     all_data: dict[str, list[np.ndarray]] = {"states": [], "actions": [], "next_states": []}
 
-    for strategy in ["random", "sinusoidal", "step"]:
+    for strategy in ["random", "sinusoidal", "step", "mixed"]:
         data = collect_cstr_rollouts(
-            n_episodes=10,
+            n_episodes=50,
             steps_per_episode=100,
             config=cstr_config,
             seed=42,
@@ -212,6 +212,9 @@ def step4_rl_evaluation(
         _make_cstr_env(cstr_config),
         setpoints=cstr_config.setpoints,
         state_names=cstr_config.state_names,
+        x0=cstr_config.x0,
+        state_low=cstr_config.state_low,
+        state_high=cstr_config.state_high,
     )
 
     results = sim_to_real_comparison(learned_env, gt_env, rl_config)
@@ -235,7 +238,7 @@ def main() -> None:
         patience=10,
         batch_size=256,
     )
-    rl_config = RLConfig(total_timesteps=50_000, eval_episodes=10)
+    rl_config = RLConfig(total_timesteps=200_000, eval_episodes=20)
 
     # Pipeline
     data = step1_collect_data(cstr_config)
