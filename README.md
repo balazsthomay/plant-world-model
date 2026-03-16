@@ -46,6 +46,35 @@ The sim-to-real transfer gap is the central evaluation: can a policy learned ent
 | Learned-trained, evaluated in Learned | -0.55 |
 | Learned-trained, evaluated in GT | -0.52 |
 
+## Scaling to Real Industrial Data: Tennessee Eastman Process
+
+To test whether the pipeline generalizes beyond a toy system, we applied it to the Tennessee Eastman Process — a standard 52-variable chemical plant benchmark. Using 1 year of simulated operation data (24K normal-operation transitions, 41 measured variables, 11 manipulated variables), the same ensemble architecture learns the plant dynamics.
+
+### Multi-step rollouts on 4 key TEP variables
+
+The model tracks reactor temperature (XMEAS(9)) and stripper underflow (XMEAS(17)) well, while reactor pressure (XMEAS(7)) diverges at longer horizons due to compounding errors in the coupled pressure dynamics. This is the expected behavior — not all variables are equally predictable, and characterizing which ones the model captures is itself valuable.
+
+![TEP Rollout Comparison](figures/tep_rollout_comparison.png)
+
+### Prediction error varies by variable and horizon
+
+Some variables (reactor temp) stay accurate to 10<sup>-3</sup> MSE at 50 steps; others (reactor pressure, compressor work) grow to 10<sup>2</sup>-10<sup>3</sup>. This reflects the physical coupling structure — pressure dynamics are fast and sensitive, while temperature dynamics are slow and smooth.
+
+![TEP Multi-Step Error](figures/tep_multistep_error.png)
+
+### Action variation in the TEP data
+
+A key question for learned world models: does the logged data contain enough control input diversity to learn dynamics? The TEP dataset has mixed results:
+
+| Variable | Description | CV (%) | Verdict |
+|----------|-------------|--------|---------|
+| XMV(3) | A feed flow valve | 26.4% | Good |
+| XMV(9) | Stripper steam valve | 19.7% | Good |
+| XMV(5-8,11) | Various valves | 5-9% | Moderate |
+| XMV(1,2,10) | Feed/cooling valves | 1-2% | Poor |
+
+Variables with high variation (XMV(3), XMV(9)) contribute most to dynamics learning. Variables near steady-state (XMV(1), XMV(2)) provide little information about how the plant responds to control changes — more diverse data would be needed to learn their effects.
+
 ## Technical Details
 
 **Dynamics Model**: Ensemble of 5 probabilistic MLPs (4 hidden layers of 200 units, SiLU activation). Each network outputs a Gaussian distribution over state deltas (next_state - current_state). Trained with Gaussian negative log-likelihood loss on bootstrap samples with early stopping. Epistemic uncertainty = variance of ensemble means; aleatoric uncertainty = mean of ensemble variances.
@@ -60,8 +89,12 @@ The sim-to-real transfer gap is the central evaluation: can a policy learned ent
 # Install dependencies
 uv sync
 
-# Run full pipeline (data collection -> training -> evaluation -> figures)
+# Run CSTR pipeline (data collection -> training -> RL evaluation -> figures)
 uv run python -m scripts.run_pipeline
+
+# Run TEP pipeline (load data -> training -> evaluation -> figures)
+# Requires TEP data in data/tep/python_data_1year.csv (from github.com/anasouzac/new_tep_datasets)
+uv run python -m scripts.run_tep
 
 # Run tests
 uv run pytest --cov=src
@@ -72,26 +105,27 @@ uv run pytest --cov=src
 ```
 src/
   configs.py            # Dataclass configurations
-  data_collection.py    # PC-Gym CSTR data collection
+  data_collection.py    # PC-Gym CSTR data collection + TEP CSV loading
   dataset.py            # Normalization and PyTorch datasets
   dynamics_model.py     # Probabilistic MLP ensemble
   training.py           # Ensemble training with bootstrap + early stopping
   learned_env.py        # Gymnasium wrapper around learned model
   rl_evaluation.py      # SB3 training and sim-to-real comparison
   figures.py            # Visualization
-tests/                  # 41 tests, 92% coverage
+tests/                  # 47 tests, 92% coverage
 scripts/
-  run_pipeline.py       # End-to-end pipeline
+  run_pipeline.py       # CSTR end-to-end pipeline
+  run_tep.py            # TEP data pipeline
 ```
 
 ## Limitations and Next Steps
 
-**What works well**: On the 2-state CSTR (a standard benchmark), the ensemble learns accurate dynamics and produces a simulator faithful enough for zero-gap policy transfer. The uncertainty decomposition correctly identifies when the model is extrapolating.
+**What works well**: On the 2-state CSTR, the ensemble learns accurate dynamics and produces a simulator faithful enough for zero-gap policy transfer. On the 52-variable TEP, the model captures slow dynamics (temperature, flows) well but struggles with fast, coupled variables (pressure). The uncertainty decomposition correctly identifies when the model is extrapolating.
 
 **What would need work for real deployment**:
 
-- **Scale**: Industrial processes have 20-50+ state variables. The CSTR has 2. The architecture scales linearly in parameters but the data requirements and evaluation complexity grow significantly.
+- **Variable-specific modeling**: The TEP results show that not all state variables are equally learnable. Fast, coupled dynamics (pressure) may need higher-frequency data or physics-informed architectures. A production system should identify which variables the model is reliable for.
+- **Action excitation**: The TEP data's manipulated variables have uneven variation (1-26% CV). Variables near steady-state provide little information for dynamics learning. Active data collection strategies (designed experiments, exploratory controllers) would significantly improve model quality.
 - **Partial observability**: Real plants have unmeasured state variables. A latent dynamics model (encoder + recurrent state) would be needed.
 - **Non-stationarity**: Equipment degrades, feedstock changes. The model would need online adaptation or periodic retraining.
-- **Data quality**: The CSTR data has perfect action variation because we control the simulator. Real plant data from operators running near steady-state may lack the excitation needed to learn dynamics — this is the fundamental data requirements question for learned world models.
-- **Safety**: The learned environment should flag when the RL agent visits states far from the training distribution (the uncertainty estimates support this) and the policy should be validated against known constraints before deployment.
+- **Safety**: The learned environment should flag when the RL agent visits states outside the training distribution (the uncertainty estimates support this) and the policy should be validated against known constraints before deployment.

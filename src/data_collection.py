@@ -101,21 +101,30 @@ def collect_cstr_rollouts(
     }
 
 
-def load_tep_data(csv_path: Path) -> dict[str, np.ndarray]:
-    """Load Tennessee Eastman Process data from CSV.
+def load_tep_data(
+    csv_path: Path,
+    normal_only: bool = True,
+    max_rows: int | None = None,
+) -> dict[str, np.ndarray]:
+    """Load Tennessee Eastman Process data from the anasouzac dataset.
 
-    Expects columns: faultNumber, simulationRun, sample, then 52 TEP variables.
+    Format: semicolon-delimited, timestamp index, XMEAS(1-41) + XMV(1-11) + STATUS.
     Separates into 41 measured (state) and 11 manipulated (action) variables.
+
+    Args:
+        csv_path: Path to python_data_1year.csv or similar.
+        normal_only: If True, filter to STATUS=0 (normal operation).
+        max_rows: Limit number of rows to load (None for all).
     """
     import pandas as pd
 
-    df = pd.read_csv(csv_path)
-    # Skip metadata columns (faultNumber, simulationRun, sample)
-    data_cols = df.columns[3:]
+    df = pd.read_csv(csv_path, sep=";", index_col=0, nrows=max_rows)
 
-    # TEP convention: first 41 are measured (XMEAS), last 11 are manipulated (XMV)
-    state_cols = data_cols[:41]
-    action_cols = data_cols[41:52]
+    if normal_only and "STATUS" in df.columns:
+        df = df[df["STATUS"] == 0].reset_index(drop=True)
+
+    state_cols = [c for c in df.columns if c.startswith("XMEAS")]
+    action_cols = [c for c in df.columns if c.startswith("XMV")]
 
     states = df[state_cols].values.astype(np.float32)
     actions = df[action_cols].values.astype(np.float32)

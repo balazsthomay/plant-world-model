@@ -28,6 +28,20 @@ class CSTRConfig:
 
 
 @dataclass
+class TEPConfig:
+    """Configuration for the Tennessee Eastman Process."""
+
+    state_dim: int = 41
+    action_dim: int = 11
+    state_names: list[str] = field(
+        default_factory=lambda: [f"XMEAS({i})" for i in range(1, 42)]
+    )
+    action_names: list[str] = field(
+        default_factory=lambda: [f"XMV({i})" for i in range(1, 12)]
+    )
+
+
+@dataclass
 class EnsembleConfig:
     """Configuration for the dynamics model ensemble."""
 
